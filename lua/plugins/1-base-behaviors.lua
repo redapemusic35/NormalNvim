@@ -1,13 +1,12 @@
 -- Core behaviors
--- Things that add new behaviors.
+-- Plugins that add new behaviors.
 
 --    Sections:
---       -> ranger file browser    [ranger]
+--       -> yazi file browser      [yazi]
 --       -> project.nvim           [project search + auto cd]
 --       -> trim.nvim              [auto trim spaces]
 --       -> stickybuf.nvim         [lock special buffers]
---       -> telescope-undo.nvim    [undo history]
---       -> nvim-window-picker     [select buffer with a letter]
+--       -> mini.bufremove         [smart bufdelete]
 --       -> smart-splits           [move and resize buffers]
 --       -> better-scape.nvim      [esc]
 --       -> toggleterm.nvim        [term]
@@ -16,30 +15,39 @@
 --       -> neotree file browser   [neotree]
 --       -> nvim-ufo               [folding mod]
 --       -> nvim-neoclip           [nvim clipboard]
+--       -> zen-mode.nvim          [distraction free mode]
 --       -> suda.vim               [write as sudo]
---       -> vim-matchup            [Imprived % motion]
+--       -> vim-matchup            [Improved % motion]
+--       -> hop.nvim               [go to word visually]
+--       -> nvim-autopairs         [auto close brackets]
+--       -> nvim-ts-autotag        [auto close html tags]
+--       -> lsp_signature.nvim     [auto params help]
+--       -> nvim-lightbulb         [lightbulb for code actions]
+--       -> hot-reload.nvim        [config reload]
+--       -> distroupdate.nvim      [distro update]
 
--- import custom icons
-local get_icon = require("base.utils").get_icon
+local is_android = vim.fn.isdirectory('/data') == 1 -- true if on android
 
--- configures plugins
 return {
-  -- [ranger] file browser
-  -- https://github.com/kevinhwang91/rnvimr
+
+  -- [yazi] file browser
+  -- https://github.com/mikavilpas/yazi.nvim
+  -- Make sure you have yazi installed on your system!
   {
-    "kevinhwang91/rnvimr",
-    cmd = { "RnvimrToggle" },
-    init = function()
-      -- vim.g.rnvimr_vanilla = 1 → Often solves many issues
-      vim.g.rnvimr_enable_picker = 1 -- if 1, will close rnvimr after choosing a file.
-      vim.g.rnvimr_ranger_cmd = { "ranger" } -- by using a shell script like TERM=foot ranger "$@" we can open terminals inside ranger.
-    end,
+    "mikavilpas/yazi.nvim",
+    event = "User BaseDefered",
+    cmd = { "Yazi", "Yazi cwd", "Yazi toggle" },
+    opts = {
+        open_for_directories = true,
+        floating_window_scaling_factor = (is_android and 1.0) or 0.71
+    },
   },
 
   -- project.nvim [project search + auto cd]
   -- https://github.com/ahmedkhalf/project.nvim
   {
-    "ahmedkhalf/project.nvim",
+    "zeioth/project.nvim",
+    event = "User BaseDefered",
     cmd = "ProjectRoot",
     opts = {
       -- How to find root directory
@@ -51,19 +59,25 @@ return {
         ".svn",
         "Makefile",
         "package.json",
+        ".solution",
+        ".solution.toml"
+      },
+      -- Don't list the next projects
+      exclude_dirs = {
+        "~/"
       },
       silent_chdir = true,
       manual_mode = false,
+
+      -- Don't chdir for certain buffers
+      exclude_chdir = {
+        filetype = {"", "OverseerList", "alpha"},
+        buftype = {"nofile", "terminal"},
+      },
+
       --ignore_lsp = { "lua_ls" },
     },
     config = function(_, opts) require("project_nvim").setup(opts) end,
-  },
-  -- Telescope integration (:Telescope projects)
-  {
-    "nvim-telescope/telescope.nvim",
-    dependencies = {"ahmedkhalf/project.nvim"},
-    cmd = {"ProjectRoot", "Telescope projects"},
-    opts = function() require("telescope").load_extension "projects" end,
   },
 
   -- trim.nvim [auto trim spaces]
@@ -72,11 +86,11 @@ return {
     "cappyzawa/trim.nvim",
     event = "BufWrite",
     opts = {
-      -- ft_blocklist = {"typescript"},
       trim_on_write = true,
       trim_trailing = true,
       trim_last_line = false,
       trim_first_line = false,
+      -- ft_blocklist = { "markdown", "text", "org", "tex", "asciidoc", "rst" },
       -- patterns = {[[%s/\(\n\n\)\n\+/\1/]]}, -- Only one consecutive bl
     },
   },
@@ -86,59 +100,37 @@ return {
   -- By default it support neovim/aerial and others.
   {
     "stevearc/stickybuf.nvim",
+    event = "User BaseDefered",
+    config = function() require("stickybuf").setup() end
   },
 
-  -- telescope-undo.nvim [undo history]
-  -- https://github.com/debugloop/telescope-undo.nvim
-  -- BUG: We are using a fork because of a bug where options are ignored.
-  --      You can use the original repo once this is fixed.
-  -- https://github.com/debugloop/telescope-undo.nvim/issues/30#issuecomment-1575753897
+  -- mini.bufremove [smart bufdelete]
+  -- https://github.com/echasnovski/mini.bufremove
+  -- Defines what tab to go on :bufdelete
   {
-    "Zeioth/telescope-undo.nvim",
-    cmd = { "Telescope undo" },
-  },
-  -- Telescope integration (:Telescope undo)
-  {
-    "nvim-telescope/telescope.nvim",
-    dependencies = {"Zeioth/telescope-undo.nvim"},
-    cmd = { "Telescope undo" },
-    opts = function() require("telescope").load_extension "undo" end,
-  },
-
-  -- nvim-window-picker  [select buffer with a letter]
-  -- https://github.com/s1n7ax/nvim-window-picker
-  -- Warning: currently no keybinding assigned for this plugin.
-  {
-    "s1n7ax/nvim-window-picker",
-    name = "window-picker",
-    opts = {
-      picker_config = {
-        statusline_winbar_picker = {
-          use_winbar = "smart",
-        },
-      },
-    },
+    "echasnovski/mini.bufremove",
+    event = "User BaseFile"
   },
 
   --  smart-splits [move and resize buffers]
   --  https://github.com/mrjones2014/smart-splits.nvim
   {
     "mrjones2014/smart-splits.nvim",
+    event = "User BaseFile",
     opts = {
       ignored_filetypes = { "nofile", "quickfix", "qf", "prompt" },
       ignored_buftypes = { "nofile" },
     },
   },
 
-  -- Improved [esc]
+  -- better-scape.nvim [esc]
   -- https://github.com/max397574/better-escape.nvim
   {
     "max397574/better-escape.nvim",
-    event = "InsertCharPre",
+    event = "User BaseDefered",
     opts = {
-      mapping = {},
       timeout = 300,
-    },
+    }
   },
 
   -- Toggle floating terminal on <F7> [term]
@@ -149,268 +141,342 @@ return {
     "akinsho/toggleterm.nvim",
     cmd = { "ToggleTerm", "TermExec" },
     opts = {
+      highlights = {
+        Normal = { link = "Normal" },
+        NormalNC = { link = "NormalNC" },
+        NormalFloat = { link = "Normal" },
+        FloatBorder = { link = "FloatBorder" },
+        StatusLine = { link = "StatusLine" },
+        StatusLineNC = { link = "StatusLineNC" },
+        WinBar = { link = "WinBar" },
+        WinBarNC = { link = "WinBarNC" },
+      },
       size = 10,
       open_mapping = [[<F7>]],
       shading_factor = 2,
       direction = "float",
       float_opts = {
-        border = "curved",
+        border = "rounded",
         highlights = { border = "Normal", background = "Normal" },
       },
     },
   },
 
-  -- Session management [session]
-  -- Check: https://github.com/gennaro-tedesco/nvim-possession
-  --
-  -- BUG: Swap disabled on options because of this bug
-  -- https://github.com/Shatur/neovim-session-manager/issues/72
+  -- session-manager [session]
+  -- https://github.com/Shatur/neovim-session-manager
   {
     "Shatur/neovim-session-manager",
-    event = "BufWritePost",
+    event = "User BaseDefered",
     cmd = "SessionManager",
-    enabled = vim.g.resession_enabled ~= true,
-  },
-  {
-    "stevearc/resession.nvim",
-    enabled = vim.g.resession_enabled == true,
-    opts = {
-      buf_filter = function(bufnr)
-        return require("base.utils.buffer").is_valid(bufnr)
-      end,
-      tab_buf_filter = function(tabpage, bufnr)
-        return vim.tbl_contains(vim.t[tabpage].bufs, bufnr)
-      end,
-      extensions = { base = {} },
-    },
+    opts = function()
+      local config = require('session_manager.config')
+      return {
+        autoload_mode = config.AutoloadMode.Disabled,
+        autosave_last_session = false,
+        autosave_only_in_session = false,
+      }
+    end,
+    config = function(_, opts)
+      local session_manager = require('session_manager')
+      session_manager.setup(opts)
+
+      -- Auto save session
+      -- BUG: This feature will auto-close anything nofile before saving.
+      --      This include neotree, aerial, mergetool, among others.
+      --      Consider commenting the next block if this is important for you.
+      --
+      --      This won't be necessary once neovim fixes:
+      --      https://github.com/neovim/neovim/issues/12242
+      -- vim.api.nvim_create_autocmd({ 'BufWritePre' }, {
+      --   callback = function ()
+      --     session_manager.save_current_session()
+      --   end
+      -- })
+    end
   },
 
   -- spectre.nvim [search and replace in project]
   -- https://github.com/nvim-pack/nvim-spectre
+  -- INSTRUCTIONS:
+  -- To see the instructions press '?'
+  -- To start the search press <ESC>.
   -- It doesn't have ctrl-z so please always commit before using it.
   {
     "nvim-pack/nvim-spectre",
     cmd = "Spectre",
     opts = {
-      find_engine = {
-        default = {
-          find = {
-            --pick one of item in find_engine [ag, rg ]
-            cmd = "ag",
-            options = { "ignore-case" },
-          },
-          replace = {
-            -- If you install oxi with cargo you can use it instead.
-            cmd = "sed",
-          },
+      default = {
+        find = {
+          -- pick one of item in find_engine [ fd, rg ]
+          cmd = "fd",
+          options = {}
+        },
+        replace = {
+          -- pick one of item in [ sed, oxi ]
+          cmd = "sed"
+        },
+      },
+      is_insert_mode = true,    -- start open panel on is_insert_mode
+      is_block_ui_break = true, -- prevent the UI from breaking
+      mapping = {
+        ["toggle_line"] = {
+          map = "d",
+          cmd = "<cmd>lua require('spectre').toggle_line()<CR>",
+          desc = "toggle item.",
+        },
+        ["enter_file"] = {
+          map = "<cr>",
+          cmd = "<cmd>lua require('spectre.actions').select_entry()<CR>",
+          desc = "open file.",
+        },
+        ["send_to_qf"] = {
+          map = "sqf",
+          cmd = "<cmd>lua require('spectre.actions').send_to_qf()<CR>",
+          desc = "send all items to quickfix.",
+        },
+        ["replace_cmd"] = {
+          map = "src",
+          cmd = "<cmd>lua require('spectre.actions').replace_cmd()<CR>",
+          desc = "replace command.",
+        },
+        ["show_option_menu"] = {
+          map = "so",
+          cmd = "<cmd>lua require('spectre').show_options()<CR>",
+          desc = "show options.",
+        },
+        ["run_current_replace"] = {
+          map = "c",
+          cmd = "<cmd>lua require('spectre.actions').run_current_replace()<CR>",
+          desc = "confirm item.",
+        },
+        ["run_replace"] = {
+          map = "R",
+          cmd = "<cmd>lua require('spectre.actions').run_replace()<CR>",
+          desc = "replace all.",
+        },
+        ["change_view_mode"] = {
+          map = "sv",
+          cmd = "<cmd>lua require('spectre').change_view()<CR>",
+          desc = "results view mode.",
+        },
+        ["change_replace_sed"] = {
+          map = "srs",
+          cmd = "<cmd>lua require('spectre').change_engine_replace('sed')<CR>",
+          desc = "use sed to replace.",
+        },
+        ["change_replace_oxi"] = {
+          map = "sro",
+          cmd = "<cmd>lua require('spectre').change_engine_replace('oxi')<CR>",
+          desc = "use oxi to replace.",
+        },
+        ["toggle_live_update"] = {
+          map = "sar",
+          cmd = "<cmd>lua require('spectre').toggle_live_update()<CR>",
+          desc = "auto refresh changes when nvim writes a file.",
+        },
+        ["resume_last_search"] = {
+          map = "sl",
+          cmd = "<cmd>lua require('spectre').resume_last_search()<CR>",
+          desc = "repeat last search.",
+        },
+        ["insert_qwerty"] = {
+          map = "i",
+          cmd = "<cmd>startinsert<CR>",
+          desc = "insert (qwerty).",
+        },
+        ["insert_colemak"] = {
+          map = "o",
+          cmd = "<cmd>startinsert<CR>",
+          desc = "insert (colemak).",
+        },
+        ["quit"] = {
+          map = "q",
+          cmd = "<cmd>lua require('spectre').close()<CR>",
+          desc = "quit.",
         },
       },
     },
   },
 
-  --neotree
+  -- [neotree]
   -- https://github.com/nvim-neo-tree/neo-tree.nvim
   {
     "nvim-neo-tree/neo-tree.nvim",
-    dependencies = { "MunifTanjim/nui.nvim" },
+    dependencies = "MunifTanjim/nui.nvim",
     cmd = "Neotree",
-    init = function() vim.g.neo_tree_remove_legacy_commands = true end,
-    opts = {
-      auto_clean_after_session_restore = true,
-      close_if_last_window = true,
-      sources = { "filesystem", "buffers", "git_status" },
-      source_selector = {
-        winbar = true,
-        content_layout = "center",
-        sources = {
-          {
-            source = "filesystem",
-            display_name = get_icon "FolderClosed" .. " File",
-          },
-          {
-            source = "buffers",
-            display_name = get_icon "DefaultFile" .. " Bufs",
-          },
-          { source = "git_status", display_name = get_icon "Git" .. " Git" },
-          {
-            source = "diagnostics",
-            display_name = get_icon "Diagnostic" .. " Diagnostic",
+    opts = function()
+      vim.g.neo_tree_remove_legacy_commands = true
+      local utils = require("base.utils")
+      local get_icon = utils.get_icon
+      return {
+        auto_clean_after_session_restore = true,
+        close_if_last_window = true,
+        buffers = {
+          show_unloaded = true
+        },
+        sources = { "filesystem", "buffers", "git_status" },
+        source_selector = {
+          winbar = true,
+          content_layout = "center",
+          sources = {
+            {
+              source = "filesystem",
+              display_name = get_icon("FolderClosed", true) .. " File",
+            },
+            {
+              source = "buffers",
+              display_name = get_icon("DefaultFile", true) .. " Bufs",
+            },
+            {
+              source = "git_status",
+              display_name = get_icon("Git", true) .. " Git",
+            },
+            {
+              source = "diagnostics",
+              display_name = get_icon("Diagnostic", true) .. " Diagnostic",
+            },
           },
         },
-      },
-      default_component_configs = {
-        indent = { padding = 0, indent_size = 1 },
-        icon = {
-          folder_closed = get_icon "FolderClosed",
-          folder_open = get_icon "FolderOpen",
-          folder_empty = get_icon "FolderEmpty",
-          folder_empty_open = get_icon "FolderEmpty",
-          default = get_icon "DefaultFile",
-        },
-        modified = { symbol = get_icon "FileModified" },
-        git_status = {
-          symbols = {
-            added = get_icon "GitAdd",
-            deleted = get_icon "GitDelete",
-            modified = get_icon "GitChange",
-            renamed = get_icon "GitRenamed",
-            untracked = get_icon "GitUntracked",
-            ignored = get_icon "GitIgnored",
-            unstaged = get_icon "GitUnstaged",
-            staged = get_icon "GitStaged",
-            conflict = get_icon "GitConflict",
+        default_component_configs = {
+          indent = { padding = 0 },
+          icon = {
+            folder_closed = get_icon("FolderClosed"),
+            folder_open = get_icon("FolderOpen"),
+            folder_empty = get_icon("FolderEmpty"),
+            folder_empty_open = get_icon("FolderEmpty"),
+            default = get_icon("DefaultFile"),
+          },
+          modified = { symbol = get_icon("FileModified") },
+          git_status = {
+            symbols = {
+              added = get_icon("GitAdd"),
+              deleted = get_icon("GitDelete"),
+              modified = get_icon("GitChange"),
+              renamed = get_icon("GitRenamed"),
+              untracked = get_icon("GitUntracked"),
+              ignored = get_icon("GitIgnored"),
+              unstaged = get_icon("GitUnstaged"),
+              staged = get_icon("GitStaged"),
+              conflict = get_icon("GitConflict"),
+            },
           },
         },
-      },
-      commands = {
-        system_open = function(state)
-          require("base.utils").system_open(state.tree:get_node():get_id())
-        end,
-        parent_or_close = function(state)
-          local node = state.tree:get_node()
-          if
-            (node.type == "directory" or node:has_children())
-            and node:is_expanded()
-          then
-            state.commands.toggle_node(state)
-          else
-            require("neo-tree.ui.renderer").focus_node(
-              state,
-              node:get_parent_id()
-            )
-          end
-        end,
-        child_or_open = function(state)
-          local node = state.tree:get_node()
-          if node.type == "directory" or node:has_children() then
-            if not node:is_expanded() then -- if unexpanded, expand
+        -- A command is a function that we can assign to a mapping (below)
+        commands = {
+          system_open = function(state)
+            require("base.utils").open_with_program(state.tree:get_node():get_id())
+          end,
+          parent_or_close = function(state)
+            local node = state.tree:get_node()
+            if
+                (node.type == "directory" or node:has_children())
+                and node:is_expanded()
+            then
               state.commands.toggle_node(state)
-            else -- if expanded and has children, seleect the next child
+            else
               require("neo-tree.ui.renderer").focus_node(
                 state,
-                node:get_child_ids()[1]
+                node:get_parent_id()
               )
             end
-          else -- if not a directory just open it
-            state.commands.open(state)
-          end
-        end,
-        copy_selector = function(state)
-          local node = state.tree:get_node()
-          local filepath = node:get_id()
-          local filename = node.name
-          local modify = vim.fn.fnamemodify
-
-          local results = {
-            e = { val = modify(filename, ":e"), msg = "Extension only" },
-            f = { val = filename, msg = "Filename" },
-            F = {
-              val = modify(filename, ":r"),
-              msg = "Filename w/o extension",
-            },
-            h = { val = modify(filepath, ":~"), msg = "Path relative to Home" },
-            p = { val = modify(filepath, ":."), msg = "Path relative to CWD" },
-            P = { val = filepath, msg = "Absolute path" },
-          }
-
-          local messages = {
-            { "\nChoose to copy to clipboard:\n", "Normal" },
-          }
-          for i, result in pairs(results) do
-            if result.val and result.val ~= "" then
-              vim.list_extend(messages, {
-                { ("%s."):format(i), "Identifier" },
-                { (" %s: "):format(result.msg) },
-                { result.val, "String" },
-                { "\n" },
-              })
+          end,
+          child_or_open = function(state)
+            local node = state.tree:get_node()
+            if node.type == "directory" or node:has_children() then
+              if not node:is_expanded() then -- if unexpanded, expand
+                state.commands.toggle_node(state)
+              else                           -- if expanded and has children, seleect the next child
+                require("neo-tree.ui.renderer").focus_node(
+                  state,
+                  node:get_child_ids()[1]
+                )
+              end
+            else -- if not a directory just open it
+              state.commands.open(state)
             end
-          end
-          vim.api.nvim_echo(messages, false, {})
-          local result = results[vim.fn.getcharstr()]
-          if result and result.val and result.val ~= "" then
-            vim.notify("Copied: " .. result.val)
-            vim.fn.setreg("+", result.val)
-          end
-        end,
-        run_command = function(state) vim.api.nvim_input ":" end,
-        diff_files = function(state)
-          local node = state.tree:get_node()
-          local log = require "neo-tree.log"
-          state.clipboard = state.clipboard or {}
-          if diff_Node and diff_Node ~= tostring(node.id) then
-            local current_Diff = node.id
-            require("neo-tree.utils").open_file(state, diff_Node, open)
-            vim.cmd("vert diffs " .. current_Diff)
-            log.info("Diffing " .. diff_Name .. " against " .. node.name)
-            diff_Node = nil
-            current_Diff = nil
-            state.clipboard = {}
-            require("neo-tree.ui.renderer").redraw(state)
-          else
-            local existing = state.clipboard[node.id]
-            if existing and existing.action == "diff" then
-              state.clipboard[node.id] = nil
-              diff_Node = nil
-              require("neo-tree.ui.renderer").redraw(state)
-            else
-              state.clipboard[node.id] = { action = "diff", node = node }
-              diff_Name = state.clipboard[node.id].node.name
-              diff_Node = tostring(state.clipboard[node.id].node.id)
-              log.info("Diff source file " .. diff_Name)
-              require("neo-tree.ui.renderer").redraw(state)
+          end,
+          copy_selector = function(state)
+            local node = state.tree:get_node()
+            local filepath = node:get_id()
+            local filename = node.name
+            local modify = vim.fn.fnamemodify
+
+            local results = {
+              e = { val = modify(filename, ":e"), msg = "Extension only" },
+              f = { val = filename, msg = "Filename" },
+              F = {
+                val = modify(filename, ":r"),
+                msg = "Filename w/o extension",
+              },
+              h = {
+                val = modify(filepath, ":~"),
+                msg = "Path relative to Home",
+              },
+              p = {
+                val = modify(filepath, ":."),
+                msg = "Path relative to CWD",
+              },
+              P = { val = filepath, msg = "Absolute path" },
+            }
+
+            local messages = {
+              { "\nChoose to copy to clipboard:\n", "Normal" },
+            }
+            for i, result in pairs(results) do
+              if result.val and result.val ~= "" then
+                vim.list_extend(messages, {
+                  { ("%s."):format(i),           "Identifier" },
+                  { (" %s: "):format(result.msg) },
+                  { result.val,                  "String" },
+                  { "\n" },
+                })
+              end
             end
-          end
-        end,
-      },
-      window = {
-        width = 30,
-        mappings = {
-          ["<space>"] = false, -- disable space until we figure out which-key disabling
-          ["[b"] = "prev_source",
-          ["]b"] = "next_source",
-          ["e"] = function()
-            vim.api.nvim_exec("Neotree focus filesystem left", true)
+            vim.api.nvim_echo(messages, false, {})
+            local result = results[vim.fn.getcharstr()]
+            if result and result.val and result.val ~= "" then
+              vim.notify("Copied: " .. result.val)
+              vim.fn.setreg("+", result.val)
+            end
           end,
-          ["b"] = function()
-            vim.api.nvim_exec("Neotree focus buffers left", true)
+          find_in_dir = function(state)
+            local node = state.tree:get_node()
+            local path = node:get_id()
+            require("telescope.builtin").find_files {
+              cwd = node.type == "directory" and path
+                  or vim.fn.fnamemodify(path, ":h"),
+            }
           end,
-          ["g"] = function()
-            vim.api.nvim_exec("Neotree focus git_status left", true)
-          end,
-          o = "open",
-          O = "system_open",
-          h = "parent_or_close",
-          l = "child_or_open",
-          Y = "copy_selector",
-          ["s"] = "run_command",
-          ["D"] = "diff_files", -- This replaces filter directories
         },
-      },
-      filesystem = {
-        follow_current_file = true,
-        hijack_netrw_behavior = "open_current",
-        use_libuv_file_watcher = true,
-        filtered_items = {
-          visible = false, -- By default, hide hidden files, but show them dimmed when enabled.
-          hide_dotfiles = true,
-          hide_gitignored = true,
+        window = {
+          width = 30,
+          mappings = {
+            ["<space>"] = false,
+            ["<S-CR>"] = "system_open",
+            ["[b"] = "prev_source",
+            ["]b"] = "next_source",
+            F = utils.is_available("telescope.nvim") and "find_in_dir" or nil,
+            O = "system_open",
+            Y = "copy_selector",
+            h = "parent_or_close",
+            l = "child_or_open",
+          },
         },
-      },
-      event_handlers = {
-        {
-          event = "neo_tree_buffer_enter",
-          handler = function(_) vim.opt_local.signcolumn = "auto" end,
+        filesystem = {
+          follow_current_file = {
+            enabled = true,
+          },
+          hijack_netrw_behavior = "open_current",
+          use_libuv_file_watcher = true,
         },
-        --{
-        --  event = "file_opened",
-        --  handler = function(file_path)
-        --    --auto close
-        --    require("neo-tree").close_all()
-        --  end
-        --},
-      },
-    },
+        event_handlers = {
+          {
+            event = "neo_tree_buffer_enter",
+            handler = function(_) vim.opt_local.signcolumn = "auto" end,
+          },
+        },
+      }
+    end,
   },
 
   --  code [folding mod] + [promise-asyn] dependency
@@ -418,7 +484,7 @@ return {
   --  https://github.com/kevinhwang91/promise-async
   {
     "kevinhwang91/nvim-ufo",
-    event = { "User BaseFile", "InsertEnter" },
+    event = { "User BaseFile" },
     dependencies = { "kevinhwang91/promise-async" },
     opts = {
       preview = {
@@ -438,84 +504,214 @@ return {
           end
         end
 
-        return (filetype == "" or buftype == "nofile") and "indent" -- only use indent until a file is opened
-          or function(bufnr)
-            return require("ufo")
-              .getFolds(bufnr, "lsp")
-              :catch(
-                function(err)
-                  return handleFallbackException(bufnr, err, "treesitter")
-                end
-              )
-              :catch(
-                function(err)
-                  return handleFallbackException(bufnr, err, "indent")
-                end
-              )
-          end
+        -- only use indent until a file is opened
+        return (filetype == "" or buftype == "nofile") and "indent"
+            or function(bufnr)
+              return require("ufo")
+                  .getFolds(bufnr, "lsp")
+                  :catch(
+                    function(err)
+                      return handleFallbackException(bufnr, err, "treesitter")
+                    end
+                  )
+                  :catch(
+                    function(err)
+                      return handleFallbackException(bufnr, err, "indent")
+                    end
+                  )
+            end
       end,
-    },
-  },
-
-  --  [zen mode]
-  --  https://github.com/folke/zen-mode.nvim
-  {
-    "folke/zen-mode.nvim",
-    cmd = "ZenMode",
-    opts = {
-      -- your configuration comes here
-      -- or leave it empty to use the default settings
-      -- refer to the configuration section below
     },
   },
 
   --  nvim-neoclip [nvim clipboard]
   --  https://github.com/AckslD/nvim-neoclip.lua
-  --  Registers are deleted between sessions
+  --  Read their docs to enable cross-session history.
   {
     "AckslD/nvim-neoclip.lua",
-    cmd = { "Telescope neoclip", "Telescope macroscope" },
-    dependencies = { "nvim-telescope/telescope.nvim" },
-    config = function() require("neoclip").setup() end,
+    requires = 'nvim-telescope/telescope.nvim',
+    event = "User BaseFile",
+    opts = {}
   },
-  -- Telescope integration (:Telescope neoclip amd :Telescope macroscope)
+
+  --  zen-mode.nvim [distraction free mode]
+  --  https://github.com/folke/zen-mode.nvim
   {
-    "nvim-telescope/telescope.nvim",
-    cmd = { "Telescope neoclip", "Telescope macroscope" },
-    dependencies = {"AckslD/nvim-neoclip.lua"},
-    opts = function()
-      require("telescope").load_extension "neoclip"
-      require("telescope").load_extension "macroscope"
-    end,
+    "folke/zen-mode.nvim",
+    cmd = "ZenMode",
   },
 
   --  suda.nvim [write as sudo]
   --  https://github.com/lambdalisue/suda.vim
   {
-    "lambdalisue/suda.vim",
-    cmd = { "Suda" },
+    "lambdalisue/vim-suda",
+    cmd = { "SudaRead", "SudaWrite" },
   },
 
   --  vim-matchup [improved % motion]
   --  https://github.com/andymass/vim-matchup
   {
     "andymass/vim-matchup",
-    event = "CursorMoved",
+    event = "User BaseFile",
     config = function()
-      vim.g.matchup_matchparen_deferred = 1 -- work async
+      vim.g.matchup_matchparen_deferred = 1   -- work async
       vim.g.matchup_matchparen_offscreen = {} -- disable status bar icon
     end,
   },
 
   --  hop.nvim [go to word visually]
-  --  https://github.com/phaazon/hop.nvim
+  --  https://github.com/smoka7/hop.nvim
   {
-    "phaazon/hop.nvim",
+    "smoka7/hop.nvim",
     cmd = { "HopWord" },
-    opts = { keys = "etovxqpdygfblzhckisuran" },
-    config = function(_, opts)
-      -- you can configure Hop the way you like here; see :h hop-config
-      require("hop").setup(opts)
-    end,
+    opts = { keys = "etovxqpdygfblzhckisuran" }
   },
-}
+
+  --  nvim-autopairs [auto close brackets]
+  --  https://github.com/windwp/nvim-autopairs
+  --  It's disabled by default, you can enable it with <space>ua
+  {
+    "windwp/nvim-autopairs",
+    event = "InsertEnter",
+    dependencies = "windwp/nvim-ts-autotag",
+    opts = {
+      check_ts = true,
+      ts_config = { java = false },
+      fast_wrap = {
+        map = "<M-e>",
+        chars = { "{", "[", "(", '"', "'" },
+        pattern = string.gsub([[ [%'%"%)%>%]%)%}%,] ]], "%s+", ""),
+        offset = 0,
+        end_key = "$",
+        keys = "qwertyuiopzxcvbnmasdfghjkl",
+        check_comma = true,
+        highlight = "PmenuSel",
+        highlight_grey = "LineNr",
+      },
+    },
+    config = function(_, opts)
+      local npairs = require("nvim-autopairs")
+      npairs.setup(opts)
+      if not vim.g.autopairs_enabled then npairs.disable() end
+
+      local is_cmp_loaded, cmp = pcall(require, "cmp")
+      if is_cmp_loaded then
+        cmp.event:on(
+          "confirm_done",
+          require("nvim-autopairs.completion.cmp").on_confirm_done {
+            tex = false }
+        )
+      end
+    end
+  },
+
+  -- nvim-ts-autotag [auto close html tags]
+  -- https://github.com/windwp/nvim-ts-autotag
+  -- Adds support for HTML tags to the plugin nvim-autopairs.
+  {
+    "windwp/nvim-ts-autotag",
+    event = "InsertEnter",
+    dependencies = {
+      "nvim-treesitter/nvim-treesitter",
+      "windwp/nvim-autopairs"
+    },
+    opts = {}
+  },
+
+  -- lsp_signature.nvim [auto params help]
+  -- https://github.com/ray-x/lsp_signature.nvim
+  {
+    "ray-x/lsp_signature.nvim",
+    event = "User BaseFile",
+    opts = function()
+      -- Apply globals from 1-options.lua
+      local is_enabled = vim.g.lsp_signature_enabled
+      local round_borders = {}
+      if vim.g.lsp_round_borders_enabled then
+        round_borders = { border = 'rounded' }
+      end
+      return {
+        -- Window mode
+        floating_window = is_enabled, -- Display it as floating window.
+        hi_parameter = "IncSearch",   -- Color to highlight floating window.
+        handler_opts = round_borders, -- Window style
+
+        -- Hint mode
+        hint_enable = false, -- Display it as hint.
+        hint_prefix = "👈 ",
+
+        -- Additionally, you can use <space>uH to toggle inlay hints.
+        toggle_key_flip_floatwin_setting = is_enabled
+      }
+    end,
+    config = function(_, opts) require('lsp_signature').setup(opts) end
+  },
+
+  -- nvim-lightbulb [lightbulb for code actions]
+  -- https://github.com/kosayoda/nvim-lightbulb
+  -- Show a lightbulb where a code action is available
+  {
+    'kosayoda/nvim-lightbulb',
+    enabled = vim.g.codeactions_enabled,
+    event = "User BaseFile",
+    opts = {
+      action_kinds = { -- show only for relevant code actions.
+        "quickfix",
+      },
+      ignore = {
+        ft = { "lua", "markdown" }, -- ignore filetypes with bad code actions.
+      },
+      autocmd = {
+        enabled = true,
+        updatetime = 100,
+      },
+      sign = { enabled = false },
+      virtual_text = {
+        enabled = true,
+        text = require("base.utils").get_icon("Lightbulb")
+      }
+    },
+    config = function(_, opts) require("nvim-lightbulb").setup(opts) end
+  },
+
+  -- distroupdate.nvim [distro update]
+  -- https://github.com/zeioth/distroupdate.nvim
+  {
+    "zeioth/hot-reload.nvim",
+    dependencies = { "nvim-lua/plenary.nvim" },
+    event = "User BaseFile",
+    opts = function()
+      local utils = require("base.utils")
+      local config_dir = utils.os_path(vim.fn.stdpath "config" .. "/lua/base/")
+      return {
+        notify = true,
+        reload_files = {
+          config_dir .. "1-options.lua",
+          config_dir .. "4-mappings.lua"
+        },
+        reload_callback = function()
+          vim.cmd(":silent! colorscheme " .. vim.g.default_colorscheme) -- nvim     colorscheme reload command
+          vim.cmd(":silent! doautocmd ColorScheme")                     -- heirline colorscheme reload event
+        end
+      }
+    end
+  },
+
+  -- distroupdate.nvim [distro update]
+  -- https://github.com/zeioth/distroupdate.nvim
+  {
+    "zeioth/distroupdate.nvim",
+    event = "User BaseFile",
+    cmd = {
+      "DistroFreezePluginVersions",
+      "DistroReadChangelog",
+      "DistroReadVersion",
+      "DistroUpdate",
+      "DistroUpdateRevert"
+    },
+    opts = {
+        channel = "stable" -- stable/nightly
+    }
+  },
+
+} -- end of return

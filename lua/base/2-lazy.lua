@@ -1,75 +1,116 @@
--- Lazy config file (nvim package manager)
+-- Lazy.nvim config file.
 
+-- DESCRIPTION:
+-- Use this file to configure the way you get updates.
 
 --    Functions:
---       -> nvim updater options      → used to lock package version.
---       -> lazyload extra behaviors  → notifications and stuff.
---       -> assign spec               → if channel==stable, uses lazy_snatshot.lua
---       -> setup using spec          → actual setup.
+--      -> git_clone_lazy                → download lazy from git if necessary.
+--      -> after_instaling_plugins_load  → instantly try to load the plugins passed.
+--      -> get_lazy_spec                 → load and get the plugins file.
+--      -> setup_lazy                    → pass the plugins file to lazy and run setup().
 
-
--- nvim lazy packager options
--- Here you can lock/unlock your package versions.
---
--- Take a look to base.updater:
--- When setting channel to "stable", package versions will taken from:
--- ~/.config/nvim/lua/lazy_snapshot.lua
--- This snapshot can be updated by manually running :NvimLockPluginVersions
--- This opertion is never performed automatically.
---
--- When setting channel to "nightly", the snapshot will be ignored.
--- And you will get always the latest available versions.
--- But this can be unstable!!
---
--- Extra info:
--- This method is used by lazy.lua and updater.lua to lock package versions.
-base.updater = {
-  options = { remote = "origin", channel = "nightly" },
-  snapshot = { module = "lazy_snapshot", path = vim.fn.stdpath "config" .. "/lua/lazy_snapshot.lua" },
-  rollback_file = vim.fn.stdpath "cache" .. "/rollback.lua",
+-- Lazy updater options
+-- Use the same values you have in the plugin `distroupdate.nvim`
+local updates_config = {
+  channel = "stable",                  -- 'nightly', or 'stable'
+  snapshot_file = "lazy_snapshot.lua", -- plugins lockfile created by running the command ':DistroFreezePluginVersions' provided by `distroupdate.nvim`.
 }
 
-
---- lazyload extra behavior (notifications and stuff)
-local lazypath = vim.fn.stdpath "data" .. "/lazy/lazy.nvim"
-if not vim.loop.fs_stat(lazypath) then
-  local output = vim.fn.system { "git", "clone", "https://github.com/folke/lazy.nvim.git", "--branch=stable", lazypath }
-  if vim.api.nvim_get_vvar "shell_error" ~= 0 then
-    vim.api.nvim_err_writeln("Error cloning lazy.nvim repository...\n\n" .. output)
+--- Download 'lazy' from its git repository if lazy_dir doesn't exists already.
+--- Note: This function should ONLY run the first time you start nvim.
+--- @param lazy_dir string Path to clone lazy into. Recommended: `<nvim data dir>/lazy/lazy.nvim`
+local function git_clone_lazy(lazy_dir)
+  local output = vim.fn.system({
+    "git",
+    "clone",
+    "--filter=blob:none",
+    "--branch=stable",
+    "https://github.com/folke/lazy.nvim.git",
+    lazy_dir,
+  })
+  if vim.api.nvim_get_vvar("shell_error") ~= 0 then
+    vim.api.nvim_echo(
+      {{"Error cloning lazy.nvim repository...\n\n" .. output}},
+      true, {err = true}
+    )
   end
+end
+
+--- This functions creates a one time autocmd to load the plugins passed.
+--- This is useful for plugins that will trigger their own update mechanism when loaded.
+---
+--- Note: This function should ONLY run the first time you start nvim.
+--- @param plugins string[] plugins to load right after lazy end installing all.
+local function after_installing_plugins_load(plugins)
   local oldcmdheight = vim.opt.cmdheight:get()
   vim.opt.cmdheight = 1
-  vim.notify "Please wait while plugins are installed..."
   vim.api.nvim_create_autocmd("User", {
-    desc = "Load Mason and Treesitter after Lazy installs plugins",
-    once = true,
     pattern = "LazyInstall",
+    once = true,
     callback = function()
       vim.cmd.bw()
       vim.opt.cmdheight = oldcmdheight
-      vim.tbl_map(function(module) pcall(require, module) end, { "nvim-treesitter", "mason" })
-      require("base.utils").notify "Mason is installing packages if configured, check status with :Mason"
+      vim.tbl_map(function(module) pcall(require, module) end, plugins)
+      -- Note: Loading mason and treesitter will trigger updates there too if necessary.
     end,
+    desc = "Load Mason and Treesitter after Lazy installs plugins",
   })
 end
-vim.opt.rtp:prepend(lazypath)
 
- -- true if channel is 'stable'
-local pin_plugins = base.updater.options.channel == "stable"
+--- load `<config_dir>/lua/lazy_snapshot.lua` and return it as table.
+--- @return table spec A table you can pass to the `spec` option of lazy.
+local function get_lazy_spec()
+  local snapshot_filename = vim.fn.fnamemodify(updates_config.snapshot_file, ":t:r")
+  local pin_plugins = updates_config.channel == "stable"
+  local snapshot_file_exists = vim.uv.fs_stat(
+    vim.fn.stdpath("config")
+    .. "/lua/"
+    .. snapshot_filename
+    .. ".lua"
+  )
+  local spec = pin_plugins
+      and snapshot_file_exists
+      and { { import = snapshot_filename} }
+    or {}
+  vim.list_extend(spec, { { import = "plugins" } })
 
--- assign spec (if pin_plugins is true, load ./lua/lazy_snapshot.lua)
-local spec = pin_plugins and {{ import = base.updater.snapshot.module }} or {}
-vim.list_extend(spec, { { import = "plugins" } })
+  return spec
+end
 
+--- Require lazy and pass the spec.
+--- @param lazy_dir string used to specify neovim where to find the lazy_dir.
+local function setup_lazy(lazy_dir)
+  local spec = get_lazy_spec()
 
--- the actual setup
-require("lazy").setup({
-  spec = spec,
-  defaults = { lazy = true },
-  performance = {
-    rtp = {
-      disabled_plugins = { "tohtml", "gzip", "zipPlugin", "netrwPlugin", "tarPlugin" },
+  vim.opt.rtp:prepend(lazy_dir)
+  require("lazy").setup({
+    spec = spec,
+    defaults = { lazy = true },
+    performance = {
+      rtp = { -- Disable unnecessary nvim features to speed up startup.
+        disabled_plugins = {
+          "tohtml",
+          "gzip",
+          "zipPlugin",
+          "netrwPlugin",
+          "tarPlugin",
+        },
+      },
     },
-  },
-  lockfile = vim.fn.stdpath "data" .. "/lazy-lock.json",
-})
+    -- Enable luarocks if installed.
+    rocks = { enabled = vim.fn.executable("luarocks") == 1 },
+    -- We don't use this, so create it in a disposable place.
+    lockfile = vim.fn.stdpath("cache") .. "/lazy-lock.json",
+  })
+end
+
+local lazy_dir = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+local is_first_startup = not vim.uv.fs_stat(lazy_dir)
+
+-- Call the functions defined above.
+if is_first_startup then
+  git_clone_lazy(lazy_dir)
+  after_installing_plugins_load({ "nvim-treesitter", "mason" })
+  vim.notify("Please wait while plugins are installed...")
+end
+setup_lazy(lazy_dir)
